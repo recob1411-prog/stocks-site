@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+let lastAlertTime = 0;
+let lastStockSymbol = "";
+
 type Stock = {
   symbol: string;
   name: string;
@@ -35,13 +38,8 @@ const saudiStocks = [
   { symbol: "2020", name: "سابك للمغذيات", price: 142.3, change: 4.79, volume: 850000 },
   { symbol: "2310", name: "سبكيم العالمية", price: 16, change: 3.23, volume: 1450000 },
   { symbol: "4030", name: "البحري", price: 34.82, change: 2.17, volume: 1300000 },
-  { symbol: "1120", name: "مصرف الراجحي", price: 69.1, change: 0.45, volume: 3200000 },
-  { symbol: "2222", name: "أرامكو السعودية", price: 27.26, change: 0.52, volume: 8200000 },
-  { symbol: "1211", name: "معادن", price: 42.64, change: 0.28, volume: 1800000 },
-  { symbol: "7010", name: "إس تي سي", price: 38, change: 0.75, volume: 3100000 },
-  { symbol: "4007", name: "الحمادي", price: 34.3, change: -1.94, volume: 750000 },
-  { symbol: "2083", name: "مرافق", price: 88, change: -2.17, volume: 620000 },
-  { symbol: "2381", name: "الحفر العربية", price: 66.2, change: -2.65, volume: 490000 },
+  { symbol: "1120", name: "الراجحي", price: 69.1, change: 0.45, volume: 3200000 },
+  { symbol: "2222", name: "أرامكو", price: 27.26, change: 0.52, volume: 8200000 },
 ];
 
 function analyzeStock(stock: Omit<Stock, "signal">) {
@@ -51,22 +49,19 @@ function analyzeStock(stock: Omit<Stock, "signal">) {
   else if (stock.change >= 4) score += 4;
   else if (stock.change >= 2) score += 3;
   else if (stock.change >= 1) score += 2;
-  else if (stock.change > 0) score += 1;
 
-  if (stock.volume >= 3_000_000) score += 3;
-  else if (stock.volume >= 1_000_000) score += 2;
-  else if (stock.volume >= 500_000) score += 1;
+  if (stock.volume >= 2_000_000) score += 2;
+  else if (stock.volume >= 1_000_000) score += 1;
 
-  if (stock.price >= 5 && stock.price <= 150) score += 1;
-
-  if (score >= 8) return "🚀 انفجار محتمل";
-  if (score >= 6) return "🔥 فرصة قوية";
-  if (score >= 4) return "⚡ فرصة جيدة";
-  if (score >= 2) return "🟢 مراقبة";
+  if (score >= 7) return "🔥 فرصة قوية";
+  if (score >= 5) return "⚡ فرصة جيدة";
+  if (score >= 3) return "🟢 مراقبة";
   return "⚪ ضعيف";
 }
 
 export async function GET() {
+  const now = Date.now();
+
   const stocks: Stock[] = saudiStocks
     .map((stock) => ({
       ...stock,
@@ -74,25 +69,24 @@ export async function GET() {
     }))
     .sort((a, b) => b.change - a.change);
 
-  const strongOpportunities = stocks.filter(
-    (s) => s.change >= 3 || s.signal.includes("فرصة")
-  );
+  const top = stocks[0];
 
-  if (strongOpportunities.length > 0) {
-    const top = strongOpportunities[0];
+  const shouldSend =
+    now - lastAlertTime > 30 * 60 * 1000 || // بعد 30 دقيقة
+    top.symbol !== lastStockSymbol; // سهم جديد
 
+  if (shouldSend && top.change >= 3) {
     await sendTelegram(`
 🚨 تنبيه VIP
 
-📊 السهم: ${top.name}
-🔢 الرمز: ${top.symbol}
+📊 ${top.name}
 💰 السعر: ${top.price}
-📈 التغير: ${top.change.toFixed(2)}%
-🔥 الإشارة: ${top.signal}
+📈 التغير: ${top.change}%
+🔥 ${top.signal}
+    `);
 
-رابط VIP:
-https://stocks-site-ten.vercel.app/vip
-`);
+    lastAlertTime = now;
+    lastStockSymbol = top.symbol;
   }
 
   return NextResponse.json(stocks);
