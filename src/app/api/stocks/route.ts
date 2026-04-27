@@ -41,10 +41,55 @@ const arabicNames: Record<string, string> = {
   "7202.SR": "سلوشنز",
 };
 
-function getRecommendation(change: number, volume: number) {
-  if (change >= 2 && volume > 0) return "إيجابي";
-  if (change <= -2) return "سلبي";
-  return "مراقبة";
+function calculateSignalScore(stock: {
+  change: number;
+  price: number;
+  open: number;
+  high: number;
+  low: number;
+  volume: number;
+}) {
+  let score = 50;
+
+  if (stock.change >= 1) score += 10;
+  if (stock.change >= 2) score += 15;
+  if (stock.change >= 4) score += 20;
+
+  if (stock.change <= -1) score -= 10;
+  if (stock.change <= -2) score -= 20;
+  if (stock.change <= -4) score -= 25;
+
+  if (stock.price > stock.open) score += 10;
+  if (stock.price < stock.open) score -= 10;
+
+  const range = stock.high - stock.low;
+  const closeNearHigh = range > 0 ? (stock.high - stock.price) / range : 1;
+  const closeNearLow = range > 0 ? (stock.price - stock.low) / range : 1;
+
+  if (closeNearHigh <= 0.25) score += 15;
+  if (closeNearLow <= 0.25) score -= 15;
+
+  if (stock.volume > 100000) score += 5;
+  if (stock.volume > 500000) score += 10;
+  if (stock.volume > 1000000) score += 15;
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function getRecommendation(score: number, change: number) {
+  if (score >= 85 && change > 3) return "🚀 انفجار محتمل";
+  if (score >= 75) return "🔥 فرصة قوية";
+  if (score >= 65) return "⚡ فرصة جيدة";
+  if (score >= 50) return "🟢 مراقبة";
+  if (score >= 35) return "⚠️ خطر";
+  return "🔴 مخاطرة عالية";
+}
+
+function getRiskLevel(score: number) {
+  if (score >= 75) return "منخفض";
+  if (score >= 55) return "متوسط";
+  if (score >= 35) return "مرتفع";
+  return "عالي جدًا";
 }
 
 async function getStock(symbol: string) {
@@ -71,17 +116,34 @@ async function getStock(symbol: string) {
 
     const price = Number(meta.regularMarketPrice ?? 0);
     const previousClose = Number(meta.previousClose ?? price);
-    const open = Number(meta.regularMarketOpen ?? 0);
-    const high = Number(meta.regularMarketDayHigh ?? 0);
-    const low = Number(meta.regularMarketDayLow ?? 0);
-    const volume = Number(quote?.volume?.filter(Boolean)?.at(-1) ?? 0);
+    const open = Number(meta.regularMarketOpen ?? price);
+    const high = Number(meta.regularMarketDayHigh ?? price);
+    const low = Number(meta.regularMarketDayLow ?? price);
+
+    const volumes = quote?.volume?.filter((v: number) => v && v > 0) ?? [];
+    const volume = Number(volumes.at(-1) ?? 0);
+
+    if (!price || !previousClose) return null;
 
     const changeValue = price - previousClose;
     const changePercent =
       previousClose > 0 ? (changeValue / previousClose) * 100 : 0;
 
+    const baseStock = {
+      change: Number(changePercent.toFixed(2)),
+      price,
+      open,
+      high,
+      low,
+      volume,
+    };
+
+    const score = calculateSignalScore(baseStock);
+    const recommendation = getRecommendation(score, changePercent);
+
     return {
       symbol,
+      code: symbol.replace(".SR", ""),
       name: arabicNames[symbol] || symbol.replace(".SR", ""),
       price: Number(price.toFixed(2)),
       previousClose: Number(previousClose.toFixed(2)),
@@ -91,7 +153,11 @@ async function getStock(symbol: string) {
       changeValue: Number(changeValue.toFixed(2)),
       change: Number(changePercent.toFixed(2)),
       volume,
-      recommendation: getRecommendation(changePercent, volume),
+      score,
+      riskLevel: getRiskLevel(score),
+      recommendation,
+      isOpportunity: score >= 65,
+      isDanger: score < 40 || changePercent <= -3,
       updatedAt: new Date().toLocaleString("ar-SA", {
         timeZone: "Asia/Riyadh",
       }),
@@ -104,13 +170,26 @@ async function getStock(symbol: string) {
 export async function GET() {
   try {
     const results = await Promise.all(symbols.map((symbol) => getStock(symbol)));
-    const stocks = results.filter(Boolean);
+
+    const stocks = results
+      .filter(Boolean)
+      .sort((a: any, b: any) => b.score - a.score);
+
+    const opportunities = stocks.filter((stock: any) => stock.isOpportunity);
+    const danger = stocks.filter((stock: any) => stock.isDanger);
+    const topOpportunity = opportunities[0] ?? null;
 
     return NextResponse.json({
       success: true,
       count: stocks.length,
       market: "Tadawul",
       updatedAt: new Date().toISOString(),
+      summary: {
+        total: stocks.length,
+        opportunities: opportunities.length,
+        danger: danger.length,
+        topOpportunity,
+      },
       stocks,
     });
   } catch {
