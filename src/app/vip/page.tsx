@@ -171,9 +171,6 @@ export default function VIPPage() {
           </button>
 
           {error && <p style={{ color: "#f87171" }}>{error}</p>}
-
-          <p style={{ color: "#94a3b8", marginTop: 18, fontSize: 14 }}>
-            الكود التجريبي الحالي: 1234
           </p>
         </section>
       </main>
