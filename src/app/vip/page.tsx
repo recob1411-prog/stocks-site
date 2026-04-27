@@ -11,6 +11,8 @@ type Stock = {
   signal: string;
 };
 
+const VIP_CODE = "1234";
+
 function getScore(stock: Stock) {
   let score = 0;
 
@@ -42,10 +44,20 @@ function formatVolume(volume: number) {
 }
 
 export default function VIPPage() {
+  const [unlocked, setUnlocked] = useState(false);
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const saved = localStorage.getItem("vip_unlocked");
+    if (saved === "yes") setUnlocked(true);
+  }, []);
+
+  useEffect(() => {
+    if (!unlocked) return;
+
     fetch("/api/stocks")
       .then((res) => res.json())
       .then((data) => {
@@ -56,7 +68,17 @@ export default function VIPPage() {
         setStocks([]);
         setLoading(false);
       });
-  }, []);
+  }, [unlocked]);
+
+  function login() {
+    if (code === VIP_CODE) {
+      localStorage.setItem("vip_unlocked", "yes");
+      setUnlocked(true);
+      setError("");
+    } else {
+      setError("كود الدخول غير صحيح");
+    }
+  }
 
   const vipStocks = useMemo(() => {
     return [...stocks]
@@ -70,160 +92,129 @@ export default function VIPPage() {
 
   const best = vipStocks[0];
 
-  return (
-    <main
-      dir="rtl"
-      style={{
-        padding: 24,
-        minHeight: "100vh",
-        color: "white",
-        background: "linear-gradient(135deg, #020617, #111827)",
-        fontFamily: "Arial",
-      }}
-    >
-      <header style={{ textAlign: "center", marginBottom: 28 }}>
-        <p style={{ color: "#facc15", marginBottom: 8 }}>VIP</p>
-        <h1 style={{ fontSize: 42, margin: 0 }}>💎 الفرص الذهبية</h1>
-        <p style={{ color: "#cbd5e1" }}>
-          صفحة خاصة لأقوى الفرص حسب التحليل الذكي
-        </p>
-      </header>
-
-      <section
+  if (!unlocked) {
+    return (
+      <main
+        dir="rtl"
         style={{
-          background: "linear-gradient(135deg, #92400e, #78350f)",
-          padding: 22,
-          borderRadius: 18,
-          marginBottom: 24,
-          textAlign: "center",
-          boxShadow: "0 10px 30px rgba(0,0,0,.35)",
+          minHeight: "100vh",
+          padding: 24,
+          color: "white",
+          background: "linear-gradient(135deg, #020617, #111827)",
+          fontFamily: "Arial",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
-        <h2 style={{ marginTop: 0 }}>🔐 منطقة المشتركين</h2>
-        <p style={{ color: "#fde68a" }}>
-          هذه الصفحة جاهزة للربط لاحقًا بنظام اشتراك شهري.
-        </p>
-        <button
+        <section
           style={{
-            padding: "12px 22px",
-            borderRadius: 12,
-            border: "none",
-            background: "#facc15",
-            color: "#111827",
-            fontWeight: "bold",
-            cursor: "pointer",
+            width: "100%",
+            maxWidth: 430,
+            background: "#0f172a",
+            padding: 26,
+            borderRadius: 20,
+            border: "1px solid #334155",
+            textAlign: "center",
           }}
         >
-          اشترك الآن — قريبًا
-        </button>
-      </section>
+          <h1>🔐 VIP مغلق</h1>
+          <p style={{ color: "#cbd5e1" }}>
+            هذه الصفحة مخصصة للمشتركين فقط.
+          </p>
+
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="أدخل كود الاشتراك"
+            style={{
+              width: "100%",
+              padding: 14,
+              borderRadius: 12,
+              border: "1px solid #334155",
+              background: "#020617",
+              color: "white",
+              marginBottom: 12,
+              fontSize: 16,
+              textAlign: "center",
+            }}
+          />
+
+          <button
+            onClick={login}
+            style={{
+              width: "100%",
+              padding: 14,
+              borderRadius: 12,
+              border: "none",
+              background: "#facc15",
+              color: "#111827",
+              fontWeight: "bold",
+              cursor: "pointer",
+            }}
+          >
+            دخول VIP
+          </button>
+
+          {error && <p style={{ color: "#f87171" }}>{error}</p>}
+
+          <p style={{ color: "#94a3b8", marginTop: 18, fontSize: 14 }}>
+            الكود التجريبي الحالي: 1234
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main dir="rtl" style={{ padding: 24, minHeight: "100vh", color: "white", background: "#020617", fontFamily: "Arial" }}>
+      <h1 style={{ textAlign: "center", fontSize: 42 }}>💎 الفرص الذهبية VIP</h1>
 
       {loading ? (
         <p style={{ textAlign: "center" }}>جاري تحميل فرص VIP...</p>
       ) : (
         <>
           {best && (
-            <section
-              style={{
-                background: "linear-gradient(135deg, #166534, #14532d)",
-                padding: 22,
-                borderRadius: 18,
-                marginBottom: 24,
-              }}
-            >
-              <h2 style={{ marginTop: 0 }}>🏆 أقوى فرصة VIP</h2>
-              <h3 style={{ fontSize: 28, marginBottom: 8 }}>
-                {best.name} ({best.symbol})
-              </h3>
+            <section style={{ background: "#14532d", padding: 22, borderRadius: 18, marginBottom: 24 }}>
+              <h2>🏆 أقوى فرصة VIP</h2>
+              <h3>{best.name} ({best.symbol})</h3>
               <p>السعر: {best.price}</p>
-              <p style={{ color: best.change >= 0 ? "#22c55e" : "#ef4444" }}>
-                التغير: {best.change.toFixed(2)}%
-              </p>
+              <p>التغير: {best.change.toFixed(2)}%</p>
               <p>الحجم: {formatVolume(best.volume)}</p>
               <p>القوة: {best.score}</p>
               <p>الإشارة: {best.signal}</p>
             </section>
           )}
 
-          <section
-            style={{
-              background: "rgba(15,23,42,.9)",
-              borderRadius: 18,
-              overflow: "hidden",
-              border: "1px solid #334155",
-            }}
-          >
-            <h2 style={{ padding: 16, margin: 0 }}>🔥 قائمة فرص VIP</h2>
-
-            {vipStocks.length === 0 ? (
-              <p style={{ padding: 16, color: "#cbd5e1" }}>
-                لا توجد فرص قوية حاليًا.
-              </p>
-            ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ background: "#1e293b" }}>
-                      <th style={thStyle}>#</th>
-                      <th style={thStyle}>السهم</th>
-                      <th style={thStyle}>السعر</th>
-                      <th style={thStyle}>التغير</th>
-                      <th style={thStyle}>الحجم</th>
-                      <th style={thStyle}>القوة</th>
-                      <th style={thStyle}>الإشارة</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {vipStocks.map((stock, index) => (
-                      <tr key={stock.symbol} style={{ borderTop: "1px solid #334155" }}>
-                        <td style={tdStyle}>{index + 1}</td>
-                        <td style={tdStyle}>
-                          <strong>{stock.name}</strong>
-                          <div style={{ color: "#94a3b8", fontSize: 13 }}>
-                            {stock.symbol}
-                          </div>
-                        </td>
-                        <td style={tdStyle}>{stock.price}</td>
-                        <td
-                          style={{
-                            ...tdStyle,
-                            color: stock.change >= 0 ? "#22c55e" : "#ef4444",
-                          }}
-                        >
-                          {stock.change.toFixed(2)}%
-                        </td>
-                        <td style={tdStyle}>{formatVolume(stock.volume)}</td>
-                        <td style={{ ...tdStyle, color: "#facc15", fontWeight: "bold" }}>
-                          {stock.score}
-                        </td>
-                        <td style={tdStyle}>{stock.signal}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-
-          <p style={{ color: "#94a3b8", textAlign: "center", marginTop: 18 }}>
-            تنبيه: هذه منصة تحليل ومتابعة وليست توصية شراء أو بيع.
-          </p>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#1e293b" }}>
+                <th style={th}>#</th>
+                <th style={th}>السهم</th>
+                <th style={th}>السعر</th>
+                <th style={th}>التغير</th>
+                <th style={th}>القوة</th>
+                <th style={th}>الإشارة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vipStocks.map((s, i) => (
+                <tr key={s.symbol} style={{ borderTop: "1px solid #334155" }}>
+                  <td style={td}>{i + 1}</td>
+                  <td style={td}>{s.name}</td>
+                  <td style={td}>{s.price}</td>
+                  <td style={td}>{s.change.toFixed(2)}%</td>
+                  <td style={td}>{s.score}</td>
+                  <td style={td}>{s.signal}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </>
       )}
     </main>
   );
 }
 
-const thStyle: React.CSSProperties = {
-  padding: 14,
-  textAlign: "center",
-  color: "#cbd5e1",
-  whiteSpace: "nowrap",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: 14,
-  textAlign: "center",
-  whiteSpace: "nowrap",
-};
+const th: React.CSSProperties = { padding: 14, textAlign: "center" };
+const td: React.CSSProperties = { padding: 14, textAlign: "center" };
