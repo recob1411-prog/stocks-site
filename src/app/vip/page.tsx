@@ -70,15 +70,29 @@ export default function VIPPage() {
       });
   }, [unlocked]);
 
-  function login() {
-    if (code === VIP_CODE) {
+ async function login() {
+  try {
+    const res = await fetch("/api/vip-login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ code }),
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
       localStorage.setItem("vip_unlocked", "yes");
       setUnlocked(true);
       setError("");
     } else {
       setError("كود الدخول غير صحيح");
     }
+  } catch (err) {
+    setError("خطأ في الاتصال بالسيرفر");
   }
+}
 
   const vipStocks = useMemo(() => {
     return [...stocks]
