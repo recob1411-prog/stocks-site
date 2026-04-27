@@ -20,6 +20,9 @@ function getScore(stock: Stock) {
   else if (stock.change >= 1) score += 20;
   else if (stock.change > 0) score += 10;
 
+  if (stock.change < 0) score -= 15;
+  if (stock.change <= -2) score -= 20;
+
   if (stock.volume >= 3_000_000) score += 30;
   else if (stock.volume >= 1_000_000) score += 20;
   else if (stock.volume >= 500_000) score += 10;
@@ -41,16 +44,29 @@ function formatVolume(volume: number) {
   return volume.toString();
 }
 
+function getScoreColor(score: number) {
+  if (score >= 80) return "#facc15";
+  if (score >= 60) return "#22c55e";
+  if (score >= 40) return "#38bdf8";
+  if (score >= 20) return "#cbd5e1";
+  return "#f87171";
+}
+
 export default function Home() {
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [onlyOpportunities, setOnlyOpportunities] = useState(false);
 
   useEffect(() => {
     fetch("/api/stocks")
       .then((res) => res.json())
       .then((data) => {
-        setStocks(data);
+        setStocks(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch(() => {
+        setStocks([]);
         setLoading(false);
       });
   }, []);
@@ -64,10 +80,16 @@ export default function Home() {
       .sort((a, b) => b.score - a.score);
   }, [stocks]);
 
-  const filteredStocks = rankedStocks.filter((stock) => {
-    const q = search.trim();
-    return stock.name.includes(q) || stock.symbol.includes(q);
-  });
+  const filteredStocks = rankedStocks
+    .filter((stock) => {
+      const q = search.trim();
+      if (!q) return true;
+      return stock.name.includes(q) || stock.symbol.includes(q);
+    })
+    .filter((stock) => {
+      if (!onlyOpportunities) return true;
+      return stock.score >= 60;
+    });
 
   const bestStock = rankedStocks[0];
   const opportunities = rankedStocks.filter((s) => s.score >= 60).length;
@@ -126,6 +148,22 @@ export default function Home() {
             </div>
           </section>
 
+          {bestStock && bestStock.score >= 80 && (
+            <div
+              style={{
+                background: "linear-gradient(135deg, #dc2626, #7f1d1d)",
+                padding: 14,
+                borderRadius: 14,
+                marginBottom: 18,
+                textAlign: "center",
+                fontWeight: "bold",
+                boxShadow: "0 8px 25px rgba(0,0,0,.3)",
+              }}
+            >
+              🚨 سهم قوي الآن: {bestStock.name} — قوة {bestStock.score}
+            </div>
+          )}
+
           {bestStock && (
             <section
               style={{
@@ -153,7 +191,9 @@ export default function Home() {
                   التغير: {bestStock.change.toFixed(2)}%
                 </p>
                 <p>الحجم: {formatVolume(bestStock.volume)}</p>
-                <p>القوة: {bestStock.score}</p>
+                <p style={{ color: getScoreColor(bestStock.score) }}>
+                  القوة: {bestStock.score}
+                </p>
                 <p>الإشارة: {bestStock.signal}</p>
               </div>
             </section>
@@ -170,10 +210,26 @@ export default function Home() {
               border: "1px solid #334155",
               background: "#0f172a",
               color: "white",
-              marginBottom: 20,
+              marginBottom: 14,
               fontSize: 16,
             }}
           />
+
+          <button
+            onClick={() => setOnlyOpportunities(!onlyOpportunities)}
+            style={{
+              marginBottom: 16,
+              padding: "12px 18px",
+              borderRadius: 12,
+              border: "none",
+              background: onlyOpportunities ? "#22c55e" : "#1e293b",
+              color: "white",
+              cursor: "pointer",
+              fontWeight: "bold",
+            }}
+          >
+            {onlyOpportunities ? "عرض كل الأسهم" : "عرض الفرص فقط"}
+          </button>
 
           <section
             style={{
@@ -203,13 +259,16 @@ export default function Home() {
                   {filteredStocks.map((stock, index) => (
                     <tr key={stock.symbol} style={{ borderTop: "1px solid #334155" }}>
                       <td style={tdStyle}>{index + 1}</td>
+
                       <td style={tdStyle}>
                         <strong>{stock.name}</strong>
                         <div style={{ color: "#94a3b8", fontSize: 13 }}>
                           {stock.symbol}
                         </div>
                       </td>
+
                       <td style={tdStyle}>{stock.price}</td>
+
                       <td
                         style={{
                           ...tdStyle,
@@ -218,8 +277,19 @@ export default function Home() {
                       >
                         {stock.change.toFixed(2)}%
                       </td>
+
                       <td style={tdStyle}>{formatVolume(stock.volume)}</td>
-                      <td style={tdStyle}>{stock.score}</td>
+
+                      <td
+                        style={{
+                          ...tdStyle,
+                          color: getScoreColor(stock.score),
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {stock.score}
+                      </td>
+
                       <td style={tdStyle}>{stock.signal}</td>
                     </tr>
                   ))}
@@ -249,9 +319,11 @@ const thStyle: React.CSSProperties = {
   padding: 14,
   textAlign: "center",
   color: "#cbd5e1",
+  whiteSpace: "nowrap",
 };
 
 const tdStyle: React.CSSProperties = {
   padding: 14,
   textAlign: "center",
+  whiteSpace: "nowrap",
 };
